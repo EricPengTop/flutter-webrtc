@@ -11,6 +11,7 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjection;
+import android.os.Build;
 import android.view.Surface;
 import android.view.WindowManager;
 import android.app.Activity;
@@ -19,12 +20,14 @@ import android.util.DisplayMetrics;
 import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjectionManager;
 import android.view.Display;
+import android.util.Log;
 
 /**
  * An copy of ScreenCapturerAndroid to capture the screen content while being aware of device orientation
  */
 @TargetApi(21)
 public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink {
+    static final String TAG = FlutterWebRTCPlugin.TAG;
     private static final int DISPLAY_FLAGS =
             DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     // DPI for VirtualDisplay, does not seem to matter for us.
@@ -63,13 +66,31 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
     public void onFrame(VideoFrame frame) {
         checkNotDisposed();
-        this.isPortrait = isDeviceOrientationPortrait();
-        final int max = Math.max(this.height, this.width);
-        final int min = Math.min(this.height, this.width);
-        if (this.isPortrait) {
-            changeCaptureFormat(min, max, 15);
+        final boolean nowPortrait = isDeviceOrientationPortrait();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // 仅在方向实际发生变化时才 resize，不要每帧都执行。
+            // 每帧重建 Surface 会导致 Android 13+ 的 BufferQueue 生命周期管理更严格，
+            // VirtualDisplay 停止产出帧。
+            if (nowPortrait != this.isPortrait) {
+                Log.d(TAG, "device now screen orientation: " + nowPortrait + ", before orientation: " + this.isPortrait);
+                this.isPortrait = nowPortrait;
+                final int max = Math.max(this.height, this.width);
+                final int min = Math.min(this.height, this.width);
+                if (this.isPortrait) {
+                    changeCaptureFormat(min, max, 15);
+                } else {
+                    changeCaptureFormat(max, min, 15);
+                }
+            }
         } else {
-            changeCaptureFormat(max, min, 15);
+            this.isPortrait = nowPortrait;
+            final int max = Math.max(this.height, this.width);
+            final int min = Math.min(this.height, this.width);
+            if (this.isPortrait) {
+                changeCaptureFormat(min, max, 15);
+            } else {
+                changeCaptureFormat(max, min, 15);
+            }
         }
         capturerObserver.onFrameCaptured(frame);
     }
