@@ -10,16 +10,14 @@ import org.webrtc.VideoSink;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.media.projection.MediaProjection;
 import android.os.Build;
 import android.view.Surface;
-import android.view.WindowManager;
 import android.app.Activity;
 import android.hardware.display.DisplayManager;
-import android.util.DisplayMetrics;
 import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjectionManager;
-import android.view.Display;
 import android.util.Log;
 
 /**
@@ -46,8 +44,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     private MediaProjection mediaProjection;
     private boolean isDisposed = false;
     private MediaProjectionManager mediaProjectionManager;
-    private WindowManager windowManager;
     private boolean isPortrait;
+    private Context applicationContext;
 
     /**
      * Constructs a new Screen Capturer.
@@ -96,11 +94,7 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     }
 
     private boolean isDeviceOrientationPortrait() {
-        final Display display = windowManager.getDefaultDisplay();
-        final DisplayMetrics metrics = new DisplayMetrics();
-        display.getRealMetrics(metrics);
-        
-        return metrics.heightPixels > metrics.widthPixels;
+        return applicationContext.getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
     }
 
 
@@ -121,9 +115,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
             throw new RuntimeException("surfaceTextureHelper not set.");
         }
         this.surfaceTextureHelper = surfaceTextureHelper;
+        this.applicationContext = applicationContext;
 
-        this.windowManager = (WindowManager) applicationContext.getSystemService(
-                Context.WINDOW_SERVICE);
         this.mediaProjectionManager = (MediaProjectionManager) applicationContext.getSystemService(
                 Context.MEDIA_PROJECTION_SERVICE);
     }
