@@ -28,6 +28,7 @@ import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
 import android.view.Display;
+import android.view.Surface;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
@@ -495,15 +496,15 @@ public class GetUserMediaImpl {
                                 resultError("screenRequestPermissions", "User didn't give permission to capture the screen.", result);
                                 return;
                             }
-                            getDisplayMedia(result, mediaStream, mediaProjectionData);
+                            getDisplayMedia(constraints, result, mediaStream, mediaProjectionData);
                         }
                     });
         } else {
-            getDisplayMedia(result, mediaStream, mediaProjectionData);
+            getDisplayMedia(constraints, result, mediaStream, mediaProjectionData);
         }
     }
 
-    private void getDisplayMedia(final Result result, final MediaStream mediaStream, final Intent mediaProjectionData) {
+    private void getDisplayMedia(final ConstraintsMap constraints, final Result result, final MediaStream mediaStream, final Intent mediaProjectionData) {
         /* Create ScreenCapture */
         VideoTrack displayTrack = null;
         VideoCapturer videoCapturer = null;
@@ -533,17 +534,44 @@ public class GetUserMediaImpl {
         videoCapturer.initialize(
                 surfaceTextureHelper, applicationContext, videoSource.getCapturerObserver());
 
-        WindowManager wm =
-                (WindowManager) applicationContext.getSystemService(Context.WINDOW_SERVICE);
+        ConstraintsMap videoConstraintsMap = null;
+        ConstraintsMap videoConstraintsMandatory = null;
 
-        Display display = wm.getDefaultDisplay();
-        Point size = new Point();
-        display.getRealSize(size);
+        if (constraints.getType("video") == ObjectType.Map) {
+            videoConstraintsMap = constraints.getMap("video");
+            if (videoConstraintsMap.hasKey("mandatory") && videoConstraintsMap.getType("mandatory") == ObjectType.Map) {
+                videoConstraintsMandatory = videoConstraintsMap.getMap("mandatory");
+            }
+        }
+
+        Log.i(TAG, "getDisplayMedia(video): " + videoConstraintsMap);
 
         VideoCapturerInfoEx info = new VideoCapturerInfoEx();
-        info.width = size.x;
-        info.height = size.y;
-        info.fps = DEFAULT_FPS;
+
+        Integer videoWidth = getConstrainInt(videoConstraintsMap, "width");
+        int targetWidth = videoWidth != null
+                ? videoWidth
+                : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minWidth")
+                ? videoConstraintsMandatory.getInt("minWidth")
+                : DEFAULT_WIDTH;
+
+        Integer videoHeight = getConstrainInt(videoConstraintsMap, "height");
+        int targetHeight = videoHeight != null
+                ? videoHeight
+                : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minHeight")
+                ? videoConstraintsMandatory.getInt("minHeight")
+                : DEFAULT_HEIGHT;
+
+        Integer videoFrameRate = getConstrainInt(videoConstraintsMap, "frameRate");
+        int targetFps = videoFrameRate != null
+                ? videoFrameRate
+                : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minFrameRate")
+                ? videoConstraintsMandatory.getInt("minFrameRate")
+                : DEFAULT_FPS;
+
+        info.width = targetWidth;
+        info.height = targetHeight;
+        info.fps = targetFps;
         info.isScreenCapture = true;
         info.capturer = videoCapturer;
 

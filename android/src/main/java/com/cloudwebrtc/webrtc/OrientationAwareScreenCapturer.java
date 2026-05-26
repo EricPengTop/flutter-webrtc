@@ -65,26 +65,12 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     public void onFrame(VideoFrame frame) {
         checkNotDisposed();
         final boolean nowPortrait = isDeviceOrientationPortrait();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // 仅在方向实际发生变化时才 resize，不要每帧都执行。
-            // 每帧重建 Surface 会导致 Android 13+ 的 BufferQueue 生命周期管理更严格，
-            // VirtualDisplay 停止产出帧。
-            if (nowPortrait != this.isPortrait) {
-                Log.d(TAG, "device now screen orientation: " + nowPortrait + ", before orientation: " + this.isPortrait);
-                this.isPortrait = nowPortrait;
-                final int max = Math.max(this.height, this.width);
-                final int min = Math.min(this.height, this.width);
-                if (this.isPortrait) {
-                    changeCaptureFormat(min, max, 15);
-                } else {
-                    changeCaptureFormat(max, min, 15);
-                }
-            }
-        } else {
+        if (nowPortrait != this.isPortrait) {
+            Log.d(TAG, "device orientation changed from " + this.isPortrait + " to " + nowPortrait);
             this.isPortrait = nowPortrait;
             final int max = Math.max(this.height, this.width);
             final int min = Math.min(this.height, this.width);
-            if (this.isPortrait) {
+            if (nowPortrait) {
                 changeCaptureFormat(min, max, 15);
             } else {
                 changeCaptureFormat(max, min, 15);
@@ -127,13 +113,10 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         //checkNotDisposed();
 
         this.isPortrait = isDeviceOrientationPortrait();
-        if (this.isPortrait) {
-            this.width = width;
-            this.height = height;
-        } else {
-            this.height = width;
-            this.width = height;
-        }
+
+        this.width = width;
+        this.height = height;
+
         this.oldWidth = this.width;
         this.oldHeight = this.height;
 
