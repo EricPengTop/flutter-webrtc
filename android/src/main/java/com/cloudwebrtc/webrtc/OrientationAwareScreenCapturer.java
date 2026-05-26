@@ -45,6 +45,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     private boolean isDisposed = false;
     private MediaProjectionManager mediaProjectionManager;
     private boolean isPortrait;
+    private int framerate;
+    private long lastFrameTimestampNs = 0;
     private Context applicationContext;
 
     /**
@@ -64,6 +66,17 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
     public void onFrame(VideoFrame frame) {
         checkNotDisposed();
+
+        if (framerate > 0) {
+            long frameIntervalNs = 1_000_000_000L / framerate;
+            long nowNs = System.nanoTime();
+            long elapsedNs = nowNs - lastFrameTimestampNs;
+            if (elapsedNs < frameIntervalNs) {
+                return;
+            }
+            lastFrameTimestampNs = nowNs;
+        }
+
         final boolean nowPortrait = isDeviceOrientationPortrait();
         if (nowPortrait != this.isPortrait) {
             Log.d(TAG, "device orientation changed from " + this.isPortrait + " to " + nowPortrait);
@@ -71,9 +84,9 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
             final int max = Math.max(this.height, this.width);
             final int min = Math.min(this.height, this.width);
             if (nowPortrait) {
-                changeCaptureFormat(min, max, 15);
+                changeCaptureFormat(min, max, framerate);
             } else {
-                changeCaptureFormat(max, min, 15);
+                changeCaptureFormat(max, min, framerate);
             }
         }
         capturerObserver.onFrameCaptured(frame);
@@ -116,6 +129,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
         this.width = width;
         this.height = height;
+        this.framerate = ignoredFramerate;
+        this.lastFrameTimestampNs = 0;
 
         this.oldWidth = this.width;
         this.oldHeight = this.height;
@@ -166,12 +181,13 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
      *
      * @param width            new output video width
      * @param height           new output video height
-     * @param ignoredFramerate ignored
+     * @param framerate        new output framerate
      */
     @Override
     public synchronized void changeCaptureFormat(
-            final int width, final int height, final int ignoredFramerate) {
+            final int width, final int height, final int framerate) {
         checkNotDisposed();
+        this.framerate = framerate;
         if (this.oldWidth != width || this.oldHeight != height) {
             this.width = width;
             this.height = height;
