@@ -119,7 +119,6 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         this.width = width;
         this.height = height;
         this.frameRate = frameRate;
-        this.lastFrameTimestampNs = 0;
 
         this.oldWidth = this.width;
         this.oldHeight = this.height;
