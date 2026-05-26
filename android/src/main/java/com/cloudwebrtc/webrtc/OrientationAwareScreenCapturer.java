@@ -45,8 +45,7 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     private boolean isDisposed = false;
     private MediaProjectionManager mediaProjectionManager;
     private boolean isPortrait;
-    private int framerate;
-    private long lastFrameTimestampNs = 0;
+    private int frameRate;
     private Context applicationContext;
 
     /**
@@ -67,16 +66,6 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     public void onFrame(VideoFrame frame) {
         checkNotDisposed();
 
-        if (framerate > 0) {
-            long frameIntervalNs = 1_000_000_000L / framerate;
-            long nowNs = System.nanoTime();
-            long elapsedNs = nowNs - lastFrameTimestampNs;
-            if (elapsedNs < frameIntervalNs) {
-                return;
-            }
-            lastFrameTimestampNs = nowNs;
-        }
-
         final boolean nowPortrait = isDeviceOrientationPortrait();
         if (nowPortrait != this.isPortrait) {
             Log.d(TAG, "device orientation changed from " + this.isPortrait + " to " + nowPortrait);
@@ -84,9 +73,9 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
             final int max = Math.max(this.height, this.width);
             final int min = Math.min(this.height, this.width);
             if (nowPortrait) {
-                changeCaptureFormat(min, max, framerate);
+                changeCaptureFormat(min, max, frameRate);
             } else {
-                changeCaptureFormat(max, min, framerate);
+                changeCaptureFormat(max, min, frameRate);
             }
         }
         capturerObserver.onFrameCaptured(frame);
@@ -122,14 +111,14 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
     @Override
     public synchronized void startCapture(
-            final int width, final int height, final int ignoredFramerate) {
+            final int width, final int height, final int frameRate) {
         //checkNotDisposed();
 
         this.isPortrait = isDeviceOrientationPortrait();
 
         this.width = width;
         this.height = height;
-        this.framerate = ignoredFramerate;
+        this.frameRate = frameRate;
         this.lastFrameTimestampNs = 0;
 
         this.oldWidth = this.width;
@@ -181,13 +170,13 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
      *
      * @param width            new output video width
      * @param height           new output video height
-     * @param framerate        new output framerate
+     * @param frameRate        new output frameRate
      */
     @Override
     public synchronized void changeCaptureFormat(
-            final int width, final int height, final int framerate) {
+            final int width, final int height, final int frameRate) {
         checkNotDisposed();
-        this.framerate = framerate;
+        this.frameRate = frameRate;
         if (this.oldWidth != width || this.oldHeight != height) {
             this.width = width;
             this.height = height;
