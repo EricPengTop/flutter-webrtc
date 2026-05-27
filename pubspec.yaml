@@ -1,5 +1,5 @@
 name: flutter_webrtc
-resolution: workspace
+#resolution: workspace
 description: Flutter WebRTC plugin for iOS/Android/Desktop/Web, based on GoogleWebRTC.
 version: 1.4.1
 homepage: https://github.com/cloudwebrtc/flutter-webrtc
