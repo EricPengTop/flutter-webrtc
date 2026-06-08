@@ -123,6 +123,7 @@ class RTCVideoRenderer extends ValueNotifier<RTCVideoValue>
         onResize?.call();
         break;
       case 'didTextureChangeVideoSize':
+        print('didTextureChangeVideoSize: ${map['width']} x ${map['height']}');
         value = value.copyWith(
             width: 0.0 + map['width'],
             height: 0.0 + map['height'],
