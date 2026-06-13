@@ -32,8 +32,6 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     // 创建 VirtualDisplay 实例时使用的标志位
     private static final int DISPLAY_FLAGS =
             DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
-    // VirtualDisplay 的 DPI 设置，对实际效果影响不大
-    private static final int VIRTUAL_DISPLAY_DPI = 400;
 
     // MediaProjection 权限请求的结果数据，用于获取 MediaProjection 实例
     private final Intent mediaProjectionPermissionResultData;
@@ -83,6 +81,9 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     // 当前设备是否处于竖屏方向
     private boolean isPortrait;
 
+    // 物理显示的实际像素密度（DPI），在 initialize 中读取，用于 VirtualDisplay 以确保镜像缩放比例正确
+    private int displayDensityDpi;
+
     // 当前捕获帧率
     private int frameRate;
 
@@ -112,6 +113,14 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     public void onFrame(VideoFrame frame) {
         checkNotDisposed();
 
+        if (numCapturedFrames < 20 || numCapturedFrames % 300 == 0) {
+            final VideoFrame.Buffer buf = frame.getBuffer();
+            Log.d(TAG, "[onFrame] num=" + numCapturedFrames
+                    + " rotation=" + frame.getRotation()
+                    + " frameW=" + buf.getWidth()
+                    + " frameH=" + buf.getHeight());
+        }
+
         final boolean nowPortrait = isDeviceOrientationPortrait();
         if (nowPortrait != this.isPortrait) {
             Log.d(TAG, "device orientation changed from " + this.isPortrait + " to " + nowPortrait);
@@ -138,9 +147,14 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         final DisplayMetrics metrics = new DisplayMetrics();
         display.getRealMetrics(metrics);
 
-        final boolean isPortrait = applicationContext.getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
-
-        return metrics.heightPixels > metrics.widthPixels && isPortrait;
+        final int configOrientation = applicationContext.getResources().getConfiguration().orientation;
+        final boolean isPortrait = configOrientation == Configuration.ORIENTATION_PORTRAIT;
+        final boolean result = metrics.heightPixels > metrics.widthPixels && isPortrait;
+        Log.d(TAG, "[isPortrait] hPixels=" + metrics.heightPixels
+                + " wPixels=" + metrics.widthPixels
+                + " configOrientation=" + configOrientation
+                + " result=" + result);
+        return result;
     }
 
 
@@ -181,6 +195,12 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
                 Context.WINDOW_SERVICE);
         this.mediaProjectionManager = (MediaProjectionManager) applicationContext.getSystemService(
                 Context.MEDIA_PROJECTION_SERVICE);
+        final DisplayMetrics initMetrics = new DisplayMetrics();
+        this.windowManager.getDefaultDisplay().getRealMetrics(initMetrics);
+        this.displayDensityDpi = initMetrics.densityDpi;
+        Log.d(TAG, "[initialize] widthPixels=" + initMetrics.widthPixels
+                + ", heightPixels=" + initMetrics.heightPixels
+                + ", densityDpi=" + initMetrics.densityDpi);
     }
 
     /**
@@ -197,6 +217,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         // checkNotDisposed();
 
         this.isPortrait = isDeviceOrientationPortrait();
+        Log.d(TAG, "[startCapture] params w=" + width + " h=" + height + " fps=" + frameRate
+                + " isPortrait=" + this.isPortrait);
 
         this.width = width;
         this.height = height;
@@ -212,9 +234,15 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         // 让 MediaProjection 回调使用 SurfaceTextureHelper 的线程
         mediaProjection.registerCallback(mediaProjectionCallback, surfaceTextureHelper.getHandler());
 
-        createVirtualDisplay();
-        capturerObserver.onCapturerStarted(true);
-        surfaceTextureHelper.startListening(this);
+        ThreadUtils.invokeAtFrontUninterruptibly(surfaceTextureHelper.getHandler(), new Runnable() {
+            @Override
+            public void run() {
+                Log.d(TAG, "[startCapture] handler thread running, calling createVirtualDisplay");
+                createVirtualDisplay();
+                capturerObserver.onCapturerStarted(true);
+                surfaceTextureHelper.startListening(OrientationAwareScreenCapturer.this);
+            }
+        });
     }
 
     /**
@@ -294,12 +322,15 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
      * 绑定 SurfaceTextureHelper 的 SurfaceTexture 的 Surface 上。
      */
     private void createVirtualDisplay() {
+        Log.d(TAG, "[createVirtualDisplay] width=" + width + " height=" + height
+                + " displayDensityDpi=" + displayDensityDpi);
         updateSurfaceTextureSize();
         releaseVirtualDisplaySurface();
         virtualDisplaySurface = new Surface(surfaceTextureHelper.getSurfaceTexture());
         virtualDisplay = mediaProjection.createVirtualDisplay("WebRTC_ScreenCapture", width, height,
-                VIRTUAL_DISPLAY_DPI, DISPLAY_FLAGS, virtualDisplaySurface,
+                displayDensityDpi, DISPLAY_FLAGS, virtualDisplaySurface,
                 null /* 回调 */, null /* 回调处理器 */);
+        Log.d(TAG, "[createVirtualDisplay] VirtualDisplay created successfully");
     }
 
     /**
@@ -307,14 +338,13 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
      * 以匹配当前的宽高。释放之前的 Surface。
      */
     private void resizeVirtualDisplay() {
+        Log.d(TAG, "[resizeVirtualDisplay] width=" + width + " height=" + height
+                + " displayDensityDpi=" + displayDensityDpi);
         updateSurfaceTextureSize();
-        virtualDisplay.resize(width, height, VIRTUAL_DISPLAY_DPI);
-        final Surface oldSurface = virtualDisplaySurface;
+        virtualDisplay.resize(width, height, displayDensityDpi);
+        releaseVirtualDisplaySurface();
         virtualDisplaySurface = new Surface(surfaceTextureHelper.getSurfaceTexture());
         virtualDisplay.setSurface(virtualDisplaySurface);
-        if (oldSurface != null) {
-            oldSurface.release();
-        }
     }
 
     /**
