@@ -149,12 +149,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
         final int configOrientation = applicationContext.getResources().getConfiguration().orientation;
         final boolean isPortrait = configOrientation == Configuration.ORIENTATION_PORTRAIT;
-        final boolean result = metrics.heightPixels > metrics.widthPixels && isPortrait;
-        Log.d(TAG, "[isPortrait] hPixels=" + metrics.heightPixels
-                + " wPixels=" + metrics.widthPixels
-                + " configOrientation=" + configOrientation
-                + " result=" + result);
-        return result;
+
+        return metrics.heightPixels > metrics.widthPixels && isPortrait;
     }
 
 
